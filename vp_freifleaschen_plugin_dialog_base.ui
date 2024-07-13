@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>dlgPvFreifleaschenDialog</class>
- <widget class="QDialog" name="dlgPvFreifleaschenDialog">
+ <class>dlgPvFreiflaechenDialog</class>
+ <widget class="QDialog" name="dlgPvFreiflaechenDialog">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>593</width>
+    <width>527</width>
     <height>420</height>
    </rect>
   </property>
@@ -18,8 +18,8 @@
     <rect>
      <x>20</x>
      <y>30</y>
-     <width>561</width>
-     <height>331</height>
+     <width>491</width>
+     <height>341</height>
     </rect>
    </property>
    <property name="alternatingRowColors">
@@ -27,17 +27,17 @@
    </property>
    <column>
     <property name="text">
-     <string>Constraint</string>
-    </property>
-   </column>
-   <column>
-    <property name="text">
      <string>ID</string>
     </property>
    </column>
    <column>
     <property name="text">
-     <string>Status</string>
+     <string>Schutzgebiete</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Name</string>
     </property>
    </column>
    <column>
@@ -49,7 +49,7 @@
   <widget class="QPushButton" name="btnPush">
    <property name="geometry">
     <rect>
-     <x>490</x>
+     <x>420</x>
      <y>380</y>
      <width>93</width>
      <height>28</height>
@@ -65,7 +65,7 @@
   <connection>
    <sender>btnPush</sender>
    <signal>pressed()</signal>
-   <receiver>dlgPvFreifleaschenDialog</receiver>
+   <receiver>dlgPvFreiflaechenDialog</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">

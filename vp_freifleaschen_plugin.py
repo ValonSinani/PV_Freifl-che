@@ -8,7 +8,6 @@
                               -------------------
         begin                : 2024-07-10
         git sha              : $Format:%H$
-        copyright            : (C) 2024 by Valon Sinani
         email                : valonsinani89@gmail.com
  ***************************************************************************/
 
@@ -21,10 +20,11 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
-
+from qgis.PyQt.QtWidgets import QAction, QMessageBox, QTableWidgetItem
+from qgis.gui import QgsMapToolEmitPoint, QgsRubberBand
+from qgis.core import QgsProject, QgsPointXY, QgsWkbTypes
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
@@ -45,9 +45,14 @@ class vp_freifleaschen:
         """
         # Save reference to the QGIS interface
         self.iface = iface
+        self.canvas = self.iface.mapCanvas()
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
         # initialize locale
+        self.addPvFreiflaechenPoint = QgsMapToolEmitPoint(self.canvas)
+        self.rbPvFreiflaechen = QgsRubberBand(self.canvas, QgsWkbTypes.LineGeometry)
+        self.rbPvFreiflaechen.setColor(Qt.red)
+        self.rbPvFreiflaechen.setWidth(4)
         locale = QSettings().value('locale/userLocale')[0:2]
         locale_path = os.path.join(
             self.plugin_dir,
@@ -66,6 +71,11 @@ class vp_freifleaschen:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+        self.dlg = vp_freifleaschenDialog()
+        self.dlg.tblImpacts.setColumnWidth(0, 80)
+        self.dlg.tblImpacts.setColumnWidth(1, 130)
+        self.dlg.tblImpacts.setColumnWidth(2, 110)
+        self.dlg.tblImpacts.setColumnWidth(3, 85)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -169,6 +179,7 @@ class vp_freifleaschen:
 
         # will be set False in run()
         self.first_start = True
+        self.addPvFreiflaechenPoint.canvasClicked.connect(self.evaluatePhotovoltaik)
 
 
     def unload(self):
@@ -178,23 +189,79 @@ class vp_freifleaschen:
                 self.tr(u'&vp_freifleaschen'),
                 action)
             self.iface.removeToolBarIcon(action)
-
-
     def run(self):
         """Run method that performs all the real work"""
+        self.canvas.setMapTool(self.addPvFreiflaechenPoint)
+        
+    def evaluatePhotovoltaik(self, point, button):
+        if button == Qt.LeftButton:
+            self.rbPvFreiflaechen.addPoint(point)
+            self.rbPvFreiflaechen.show()
+        elif button == Qt.RightButton:
+            freiflaechen = self.rbPvFreiflaechen.asGeometry()
+            self.dlg.tblImpacts.setRowCount(0)
+            lyrLanduse = QgsProject.instance().mapLayersByName("osmlanduse")[0] 
+            
+            landuses = lyrLanduse.getFeatures(freiflaechen.boundingBox())
+            for landuse in landuses:
+                valID = landuse.attribute("OSM_ID")            
+                valSchutzgebiete = "Landuse Nutzung"
+                valName = landuse.attribute("name")
+                valDistance = freiflaechen.distance(landuse.geometry().centroid())                
+                if landuse.geometry().intersects(freiflaechen):
+                    row = self.dlg.tblImpacts.rowCount()
+                    self.dlg.tblImpacts.insertRow(row)
+                    self.dlg.tblImpacts.setItem(row, 0, QTableWidgetItem(str(valID)))
+                    self.dlg.tblImpacts.setItem(row, 1, QTableWidgetItem(valSchutzgebiete))              
+                    self.dlg.tblImpacts.setItem(row, 2, QTableWidgetItem(str(valName)))               
+                    self.dlg.tblImpacts.setItem(row, 3, QTableWidgetItem("{:4.5f}".format(valDistance)))
 
-        # Create the dialog with elements (after translation) and keep reference
-        # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.first_start == True:
-            self.first_start = False
-            self.dlg = vp_freifleaschenDialog()
+                
+            lyrVP_Freiflaechen = QgsProject.instance().mapLayersByName("VP-Freiflaechen")[0]             
+            VP_Freiflaechens = lyrVP_Freiflaechen.getFeatures(freiflaechen.boundingBox())
+            for vpfreiflaechen in VP_Freiflaechens:
+                valID = vpfreiflaechen.attribute("id")            
+                valSchutzgebiete = "PV_freiflächen Ausgewertet"
+                valName = vpfreiflaechen.attribute("str_pr_mwh")
+                valDistance = freiflaechen.distance(vpfreiflaechen.geometry().centroid())
+                if vpfreiflaechen.geometry().intersects(freiflaechen):                
+                    row = self.dlg.tblImpacts.rowCount()
+                    self.dlg.tblImpacts.insertRow(row)
+                    self.dlg.tblImpacts.setItem(row, 0, QTableWidgetItem(str(valID)))
+                    self.dlg.tblImpacts.setItem(row, 1, QTableWidgetItem(valSchutzgebiete))              
+                    self.dlg.tblImpacts.setItem(row, 2, QTableWidgetItem(str(valName)))               
+                    self.dlg.tblImpacts.setItem(row, 3, QTableWidgetItem("{:4.5f}".format(valDistance)))                  
 
-        # show the dialog
-        self.dlg.show()
-        # Run the dialog event loop
-        result = self.dlg.exec_()
-        # See if OK was pressed
-        if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            pass
+            lyrLSG = QgsProject.instance().mapLayersByName("lsg")[0]             
+            lsgs = lyrLSG.getFeatures(freiflaechen.boundingBox())
+            for LSG in lsgs:
+                valID = LSG.attribute("id")            
+                valSchutzgebiete = "LSG"
+                valName = LSG.attribute("name")
+                valDistance = freiflaechen.distance(LSG.geometry().centroid())
+                if LSG.geometry().intersects(freiflaechen):                
+                    row = self.dlg.tblImpacts.rowCount()
+                    self.dlg.tblImpacts.insertRow(row)
+                    self.dlg.tblImpacts.setItem(row, 0, QTableWidgetItem(str(valID)))
+                    self.dlg.tblImpacts.setItem(row, 1, QTableWidgetItem(valSchutzgebiete))              
+                    self.dlg.tblImpacts.setItem(row, 2, QTableWidgetItem(str(valName)))               
+                    self.dlg.tblImpacts.setItem(row, 3, QTableWidgetItem("{:4.5f}".format(valDistance)))  
+                    
+            lyrNSG = QgsProject.instance().mapLayersByName("nsg")[0]             
+            nsgs = lyrNSG.getFeatures(freiflaechen.boundingBox())
+            for NSG in nsgs:
+                valID = LSG.attribute("id")            
+                valSchutzgebiete = "NSG"
+                valName = NSG.attribute("name")
+                valDistance = freiflaechen.distance(NSG.geometry().centroid())
+                if NSG.geometry().intersects(freiflaechen):                
+                    row = self.dlg.tblImpacts.rowCount()
+                    self.dlg.tblImpacts.insertRow(row)
+                    self.dlg.tblImpacts.setItem(row, 0, QTableWidgetItem(str(valID)))
+                    self.dlg.tblImpacts.setItem(row, 1, QTableWidgetItem(valSchutzgebiete))              
+                    self.dlg.tblImpacts.setItem(row, 2, QTableWidgetItem(str(valName)))               
+                    self.dlg.tblImpacts.setItem(row, 3, QTableWidgetItem("{:4.5f}".format(valDistance)))                  
+                  
+            self.dlg.show()           
+             
+            self.rbPvFreiflaechen.reset()
